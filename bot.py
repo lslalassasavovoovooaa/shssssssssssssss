@@ -60,12 +60,12 @@ async def send(bot, chat_id, text, preview=False):
     return False
 
 
-async def send_list(bot, chat_id, texts, more_hint, preview=False):
-    for t in texts[:config.MAX_NOTIFY_PER_RUN]:
+async def send_list(bot, chat_id, texts, more_hint, preview=False, limit=config.MAX_NOTIFY_PER_RUN):
+    for t in texts[:limit]:
         if not await send(bot, chat_id, t, preview):
             return
         await asyncio.sleep(0.4)
-    rest = len(texts) - config.MAX_NOTIFY_PER_RUN
+    rest = len(texts) - limit
     if rest > 0:
         await send(bot, chat_id, f"…и ещё {rest}. {more_hint}")
 
@@ -91,8 +91,25 @@ async def refresh(kind, app, notify=True):
         return len(items), len(new_ids)
 
 
+async def send_flat_digest(app):
+    flats = db.current("flats")
+    for user in db.active_users():
+        marker = f"digest_{user['chat_id']}"
+        if db.get_meta(marker) is not None:
+            continue
+        db.set_meta(marker, 1)
+        if not flats:
+            await send(app.bot, user["chat_id"], f"Сейчас аренды в {config.HOUSING_TOWN} нет. Как появится — пришлю.")
+            continue
+        await send(app.bot, user["chat_id"], f"🏠 Вся аренда в {config.HOUSING_TOWN} сейчас: {len(flats)}")
+        await send_list(app.bot, user["chat_id"], [fmt.flat_text(f) for f in flats], "Всё жильё: /flats",
+                        preview=False, limit=config.FLATS_LIMIT)
+
+
 async def broadcast(app, kind, new_items):
     for user in db.active_users():
+        if kind == "flats" and db.get_meta(f"digest_{user['chat_id']}") is None:
+            continue
         if kind == "jobs":
             visible = fmt.sort_jobs([j for j in new_items if fmt.job_visible(j, user)])
             texts = [fmt.job_text(j, new=True) for j in visible]
@@ -141,7 +158,7 @@ async def cmd_flats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg)
         return
     await update.message.reply_text(f"Аренда в {config.HOUSING_TOWN}: {len(items)}")
-    for f in items[:config.LIST_LIMIT]:
+    for f in items[:config.FLATS_LIMIT]:
         await send(context.bot, chat_id, fmt.flat_text(f), preview=True)
         await asyncio.sleep(0.3)
 

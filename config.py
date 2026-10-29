@@ -45,6 +45,8 @@ SREALITY_REGION_FALLBACK = [2]
 MAX_NOTIFY_PER_RUN = 15
 # Сколько объявлений показывать по командам /jobs и /flats
 LIST_LIMIT = 15
+FLATS_LIMIT = 40
+TELEGRAM_CHANNELS = []
 import os
 
 DB_PATH = os.getenv("BOT_DB", "bot.db")

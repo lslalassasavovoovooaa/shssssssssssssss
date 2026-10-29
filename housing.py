@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """Аренда квартир и домов в Holýšov с Sreality.cz (их JSON API)."""
 import logging
+import re
 import time
 
 import config
+import rental_sites
+import tgchannels
 from util import norm, contains_word, haversine_km
 
 log = logging.getLogger(__name__)
@@ -72,7 +75,40 @@ def compact(e: dict) -> dict:
     }
 
 
+def duplicate_key(item):
+    title = item["title"].lower()
+    area = re.search(r"(\d+)\s*m²", title)
+    if not area or not item.get("price"):
+        return None
+    disposition = re.search(r"\d\+(?:kk|\d)", title)
+    return disposition.group(0) if disposition else "", area.group(1), int(item["price"])
+
+
 def fetch_rentals(session) -> dict:
+    sources = (("Sreality", fetch_sreality), ("iDNES", rental_sites.fetch_idnes),
+               ("Bezrealitky", rental_sites.fetch_bezrealitky), ("Telegram", tgchannels.fetch_channels))
+    found = {}
+    seen = {}
+    for name, fetch in sources:
+        try:
+            items = fetch(session)
+        except Exception as e:
+            log.warning("Источник %s не отработал: %s", name, e)
+            continue
+        for item_id, item in items.items():
+            key = duplicate_key(item)
+            if key and key in seen:
+                seen[key].setdefault("also", []).append({"site": item.get("site", name), "url": item["url"]})
+                continue
+            item.setdefault("site", name)
+            found[item_id] = item
+            if key:
+                seen[key] = item
+    log.info("Аренда всего: %d объявлений", len(found))
+    return found
+
+
+def fetch_sreality(session) -> dict:
     found = {}
     for loc in resolve_locality(session):
         for main in (1, 2):
@@ -91,5 +127,5 @@ def fetch_rentals(session) -> dict:
                 if not estates or (page + 1) * PER_PAGE >= total:
                     break
                 time.sleep(1.5)
-    log.info("Аренда в %s: %d объявлений", config.HOUSING_TOWN, len(found))
+    log.info("Sreality: %d объявлений", len(found))
     return found

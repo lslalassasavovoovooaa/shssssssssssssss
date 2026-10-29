@@ -35,6 +35,7 @@ async def run(token):
             except Exception:
                 log.exception("Ошибка при проверке %s", kind)
         await answer_commands(app)
+        await bot.send_flat_digest(app)
         if bot.db.get_meta("commands_set") is None:
             await bot.on_startup(app)
             bot.db.set_meta("commands_set", int(time.time()))

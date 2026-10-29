@@ -60,11 +60,13 @@ def job_text(job, new=False) -> str:
 def flat_text(item, new=False) -> str:
     price = item.get("price")
     price_s = f"{_money(price)} Kč/měsíc" if price and price > 1 else "cena dohodou / info v RK"
+    links = [(item.get("site") or "Sreality", item["url"])] + [(a["site"], a["url"]) for a in item.get("also", [])]
+    link_line = " · ".join(f'<a href="{escape(url, quote=True)}">{escape(site)}</a>' for site, url in links)
     return "\n".join([
         ("🆕 " if new else "🏠 ") + f"<b>{escape(item['title'])}</b>",
         f"📍 {escape(item.get('locality') or '')}",
         f"💰 {price_s}",
-        f'🔗 <a href="{escape(item["url"], quote=True)}">Sreality.cz</a>',
+        f"🔗 {link_line}",
     ])
 
 
